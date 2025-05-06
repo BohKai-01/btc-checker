@@ -3,14 +3,22 @@ import pandas as pd
 import datetime
 
 def fetch_btc_data(days=200):
-    url = f"https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
+    url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
         "days": days,
         "interval": "daily"
     }
     response = requests.get(url, params=params)
+    
+    if response.status_code != 200:
+        raise Exception(f"API Error: {response.status_code} - {response.text}")
+
     data = response.json()
+    
+    if 'prices' not in data:
+        raise KeyError("Key 'prices' not found in API response. Full response:\n" + str(data))
+    
     prices = data['prices']
 
     df = pd.DataFrame(prices, columns=['timestamp', 'price'])
@@ -19,6 +27,7 @@ def fetch_btc_data(days=200):
     df.drop('timestamp', axis=1, inplace=True)
     df.rename(columns={'price': 'Close'}, inplace=True)
     return df
+
 
 def calculate_indicators(df):
     df['SMA_50'] = df['Close'].rolling(window=50).mean()
