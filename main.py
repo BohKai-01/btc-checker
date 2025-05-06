@@ -4,7 +4,7 @@ import datetime
 import streamlit as st
 
 # --- CoinGecko Fetch ---
-def fetch_coingecko_data(days=200):
+def fetch_btc_data_coingecko(days=200):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
@@ -31,11 +31,40 @@ def fetch_coingecko_data(days=200):
     return df
 
 # --- Binance Fetch ---
-def fetch_binance_data():
-    url = "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
-    response = requests.get(url)
+def fetch_btc_data_binance(days=200):
+    url = "https://api.binance.com/api/v3/klines"
+    params = {
+        "symbol": "BTCUSDT",
+        "interval": "1d",
+        "limit": days
+    }
+    response = requests.get(url, params=params)
+    
+    if response.status_code != 200:
+        raise Exception(f"API Error: {response.status_code} - {response.text}")
+
     data = response.json()
-    return float(data['price'])
+
+    # Process Binance data to match the same structure as CoinGecko
+    prices = [(item[0], item[4]) for item in data]  # Only taking the closing price
+    df = pd.DataFrame(prices, columns=['timestamp', 'price'])
+    df['Date'] = pd.to_datetime(df['timestamp'], unit='ms')
+    df.set_index('Date', inplace=True)
+    df.drop('timestamp', axis=1, inplace=True)
+    df.rename(columns={'price': 'Close'}, inplace=True)
+    return df
+
+# --- Wrapper to fetch data with fallback ---
+def fetch_btc_data(days=200):
+    try:
+        # Try CoinGecko first
+        return fetch_btc_data_coingecko(days)
+    except Exception as e:
+        if 'API Error: 429' in str(e):
+            print("CoinGecko rate limit exceeded, falling back to Binance...")
+            return fetch_btc_data_binance(days)
+        else:
+            raise e
 
 # --- Indicators ---
 def calculate_indicators(df):
@@ -94,35 +123,21 @@ st.title("🧠 Bitcoin Buy/Sell Signal App")
 # Input for current BTC price from eToro
 etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39)
 
-# Fetch data from CoinGecko and Binance
 try:
-    coingecko_df = fetch_coingecko_data()
-    coingecko_latest = coingecko_df.iloc[-1]
-    binance_price = fetch_binance_data()
-
-    # Calculate indicators for CoinGecko data
-    coingecko_df = calculate_indicators(coingecko_df)
-    coingecko_latest = coingecko_df.iloc[-1]
-
-    # Calculate percentage difference between eToro price and other platforms
-    coingecko_diff = (etoro_price - coingecko_latest['Close']) / coingecko_latest['Close'] * 100
-    binance_diff = (etoro_price - binance_price) / binance_price * 100
+    df = fetch_btc_data()
+    df = calculate_indicators(df)
+    latest = df.iloc[-1]
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     st.markdown(f"**Date/Time:** {now}")
-    st.markdown(f"**eToro BTC Price:** ${etoro_price:.2f}")
-    st.markdown(f"**CoinGecko BTC Price:** ${coingecko_latest['Close']:.2f}")
-    st.markdown(f"**Binance BTC Price:** ${binance_price:.2f}")
-    st.markdown(f"**CoinGecko vs eToro:** {coingecko_diff:.2f}% difference")
-    st.markdown(f"**Binance vs eToro:** {binance_diff:.2f}% difference")
+    st.markdown(f"**BTC Price:** ${etoro_price:.2f}")
+    st.markdown(f"**RSI (14-day):** {latest['RSI']:.2f}")
+    st.markdown(f"**SMA 50:** ${latest['SMA_50']:.2f}")
+    st.markdown(f"**SMA 200:** ${latest['SMA_200']:.2f}")
+    st.markdown(f"**MACD:** {latest['MACD']:.4f}")
+    st.markdown(f"**MACD Signal:** {latest['MACD_Signal']:.4f}")
 
-    st.markdown(f"**RSI (14-day):** {coingecko_latest['RSI']:.2f}")
-    st.markdown(f"**SMA 50:** ${coingecko_latest['SMA_50']:.2f}")
-    st.markdown(f"**SMA 200:** ${coingecko_latest['SMA_200']:.2f}")
-    st.markdown(f"**MACD:** {coingecko_latest['MACD']:.4f}")
-    st.markdown(f"**MACD Signal:** {coingecko_latest['MACD_Signal']:.4f}")
-
-    signal, reason = generate_signal(coingecko_latest['RSI'], etoro_price, coingecko_latest['SMA_50'], coingecko_latest['SMA_200'], coingecko_latest['MACD'], coingecko_latest['MACD_Signal'])
+    signal, reason = generate_signal(latest['RSI'], etoro_price, latest['SMA_50'], latest['SMA_200'], latest['MACD'], latest['MACD_Signal'])
 
     st.markdown("---")
     st.subheader(f"📢 {signal}")
