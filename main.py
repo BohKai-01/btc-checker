@@ -4,6 +4,10 @@ import pandas as pd
 import datetime
 
 # --- Fetch BTC data from CoinGecko ---
+import streamlit as st
+import time
+
+@st.cache_data(ttl=300)  # cache for 5 minutes
 def fetch_btc_data(days=200):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {"vs_currency": "usd", "days": days, "interval": "daily"}
@@ -18,6 +22,7 @@ def fetch_btc_data(days=200):
     df.set_index("Date", inplace=True)
     df.drop("timestamp", axis=1, inplace=True)
     return df
+
 
 # --- Technical Indicators ---
 def calculate_indicators(df):
