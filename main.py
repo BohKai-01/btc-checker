@@ -3,8 +3,20 @@ import pandas as pd
 import datetime
 import streamlit as st
 
+# Adding a custom HTML element to trigger numeric keyboard for mobile
+st.markdown("""
+    <style>
+        input[type='text'] {
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+            appearance: textfield;
+            inputmode: numeric;  /* For numeric keypad on mobile */
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # --- CoinGecko Fetch ---
-def fetch_btc_data_coingecko(days=200):
+def fetch_btc_data(days=200):
     url = "https://api.coingecko.com/api/v3/coins/bitcoin/market_chart"
     params = {
         "vs_currency": "usd",
@@ -85,41 +97,27 @@ st.set_page_config(page_title="BTC Buy/Sell Signal", layout="centered")
 st.title("🧠 Bitcoin Buy/Sell Signal App")
 
 # Input for current BTC price from eToro
-etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39, format="%.2f", key="etoro_price", help="Enter the current BTC price from eToro", step=0.01)
+etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39)
 
-# Fetch CoinGecko data
 try:
-    coingecko_df = fetch_btc_data_coingecko()
-    coingecko_df = calculate_indicators(coingecko_df)
+    df = fetch_btc_data()
+    df = calculate_indicators(df)
+    latest = df.iloc[-1]
 
-    # Get the latest data
-    latest = coingecko_df.iloc[-1]
-
-    # Calculate percentage difference between CoinGecko and eToro prices
-    price_diff_percentage = ((etoro_price - latest['Close']) / latest['Close']) * 100
-
-    # Display the results
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     st.markdown(f"**Date/Time:** {now}")
     st.markdown(f"**BTC Price (CoinGecko):** ${latest['Close']:.2f}")
-    st.markdown(f"**RSI (14-day):** {latest['RSI']:.2f}")
-    st.markdown(f"**SMA 50:** ${latest['SMA_50']:.2f}")
-    st.markdown(f"**SMA 200:** ${latest['SMA_200']:.2f}")
-    st.markdown(f"**MACD:** {latest['MACD']:.4f}")
-    st.markdown(f"**MACD Signal:** {latest['MACD_Signal']:.4f}")
+    st.markdown(f"**RSI (14-day, CoinGecko):** {latest['RSI']:.2f}")
+    st.markdown(f"**SMA 50 (CoinGecko):** ${latest['SMA_50']:.2f}")
+    st.markdown(f"**SMA 200 (CoinGecko):** ${latest['SMA_200']:.2f}")
+    st.markdown(f"**MACD (CoinGecko):** {latest['MACD']:.4f}")
+    st.markdown(f"**MACD Signal (CoinGecko):** {latest['MACD_Signal']:.4f}")
 
-    # Show the percentage difference
-    st.markdown(f"**Percentage Difference between eToro Price and CoinGecko Price:** {price_diff_percentage:.2f}%")
-
-    # Decision making based on price difference
-    if abs(price_diff_percentage) < 2:  # Threshold for price difference (tweaked if necessary)
-        signal, reason = generate_signal(
-            latest['RSI'], etoro_price, latest['SMA_50'], latest['SMA_200'], latest['MACD'], latest['MACD_Signal']
-        )
-    else:
-        signal = "⚠️ Price Difference Too High"
-        reason = f"The price difference between eToro and CoinGecko is too large ({price_diff_percentage:.2f}%) to rely on CoinGecko's analysis. Please verify data."
-
+    signal, reason = generate_signal(
+        latest['RSI'], etoro_price, latest['SMA_50'], latest['SMA_200'], 
+        latest['MACD'], latest['MACD_Signal']
+    )
+    
     st.markdown("---")
     st.subheader(f"📢 {signal}")
     st.markdown(f"**🧠 Reason:** {reason}")
