@@ -32,27 +32,31 @@ def fetch_btc_data_coingecko(days=200):
 
 # --- Binance Fetch ---
 def fetch_btc_data_binance(days=200):
-    url = "https://api.binance.com/api/v3/klines"
-    params = {
-        "symbol": "BTCUSDT",
-        "interval": "1d",
-        "limit": days
-    }
-    response = requests.get(url, params=params)
-    
-    if response.status_code != 200:
-        raise Exception(f"API Error: {response.status_code} - {response.text}")
+    try:
+        url = "https://api.binance.com/api/v3/klines"
+        params = {
+            "symbol": "BTCUSDT",
+            "interval": "1d",
+            "limit": days
+        }
+        response = requests.get(url, params=params)
 
-    data = response.json()
+        if response.status_code != 200:
+            raise Exception(f"API Error: {response.status_code} - {response.text}")
 
-    # Process Binance data to match the same structure as CoinGecko
-    prices = [(item[0], item[4]) for item in data]  # Only taking the closing price
-    df = pd.DataFrame(prices, columns=['timestamp', 'price'])
-    df['Date'] = pd.to_datetime(df['timestamp'], unit='ms')
-    df.set_index('Date', inplace=True)
-    df.drop('timestamp', axis=1, inplace=True)
-    df.rename(columns={'price': 'Close'}, inplace=True)
-    return df
+        data = response.json()
+
+        # Process Binance data to match the same structure as CoinGecko
+        prices = [(item[0], item[4]) for item in data]  # Only taking the closing price
+        df = pd.DataFrame(prices, columns=['timestamp', 'price'])
+        df['Date'] = pd.to_datetime(df['timestamp'], unit='ms')
+        df.set_index('Date', inplace=True)
+        df.drop('timestamp', axis=1, inplace=True)
+        df.rename(columns={'price': 'Close'}, inplace=True)
+        return df
+    except Exception as e:
+        print(f"Error fetching Binance data: {e}")
+        return pd.DataFrame()  # Return empty DataFrame if Binance fetch fails
 
 # --- Wrapper to fetch data from both platforms ---
 def fetch_btc_data(days=200):
@@ -67,7 +71,7 @@ def fetch_btc_data(days=200):
 
     # Try Binance data regardless of CoinGecko success
     binance_df = fetch_btc_data_binance(days)
-    binance_source = "Binance"
+    binance_source = "Binance" if not binance_df.empty else "No data from Binance"
 
     return coin_gecko_df, coingecko_source, binance_df, binance_source
 
