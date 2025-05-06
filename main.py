@@ -58,11 +58,11 @@ def fetch_btc_data_binance(days=200):
 def fetch_btc_data(days=200):
     try:
         # Try CoinGecko first
-        return fetch_btc_data_coingecko(days)
+        return fetch_btc_data_coingecko(days), "CoinGecko"
     except Exception as e:
         if 'API Error: 429' in str(e):
             print("CoinGecko rate limit exceeded, falling back to Binance...")
-            return fetch_btc_data_binance(days)
+            return fetch_btc_data_binance(days), "Binance"
         else:
             raise e
 
@@ -124,13 +124,14 @@ st.title("🧠 Bitcoin Buy/Sell Signal App")
 etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39)
 
 try:
-    df = fetch_btc_data()
+    df, source = fetch_btc_data()
     df = calculate_indicators(df)
     latest = df.iloc[-1]
 
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     st.markdown(f"**Date/Time:** {now}")
-    st.markdown(f"**BTC Price:** ${etoro_price:.2f}")
+    st.markdown(f"**BTC Price:** ${etoro_price:.2f} (from eToro)")
+    st.markdown(f"**Data Source:** {source}")
     st.markdown(f"**RSI (14-day):** {latest['RSI']:.2f}")
     st.markdown(f"**SMA 50:** ${latest['SMA_50']:.2f}")
     st.markdown(f"**SMA 200:** ${latest['SMA_200']:.2f}")
