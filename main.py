@@ -54,17 +54,22 @@ def fetch_btc_data_binance(days=200):
     df.rename(columns={'price': 'Close'}, inplace=True)
     return df
 
-# --- Wrapper to fetch data with fallback ---
+# --- Wrapper to fetch data from both platforms ---
 def fetch_btc_data(days=200):
     try:
         # Try CoinGecko first
-        return fetch_btc_data_coingecko(days), "CoinGecko"
+        coin_gecko_df = fetch_btc_data_coingecko(days)
+        coingecko_source = "CoinGecko"
     except Exception as e:
-        if 'API Error: 429' in str(e):
-            print("CoinGecko rate limit exceeded, falling back to Binance...")
-            return fetch_btc_data_binance(days), "Binance"
-        else:
-            raise e
+        print("CoinGecko failed, falling back to Binance...")
+        coin_gecko_df = pd.DataFrame()  # Empty DataFrame if CoinGecko fails
+        coingecko_source = "No data from CoinGecko"
+
+    # Try Binance data regardless of CoinGecko success
+    binance_df = fetch_btc_data_binance(days)
+    binance_source = "Binance"
+
+    return coin_gecko_df, coingecko_source, binance_df, binance_source
 
 # --- Indicators ---
 def calculate_indicators(df):
@@ -124,22 +129,44 @@ st.title("🧠 Bitcoin Buy/Sell Signal App")
 etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39)
 
 try:
-    df, source = fetch_btc_data()
-    df = calculate_indicators(df)
-    latest = df.iloc[-1]
-
+    coin_gecko_df, coingecko_source, binance_df, binance_source = fetch_btc_data()
+    
+    # Calculate indicators for both datasets
+    coin_gecko_df = calculate_indicators(coin_gecko_df)
+    binance_df = calculate_indicators(binance_df)
+    
+    # Latest data for both
+    latest_coingecko = coin_gecko_df.iloc[-1] if not coin_gecko_df.empty else None
+    latest_binance = binance_df.iloc[-1]
+    
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    # Display results for CoinGecko
     st.markdown(f"**Date/Time:** {now}")
-    st.markdown(f"**BTC Price:** ${etoro_price:.2f} (from eToro)")
-    st.markdown(f"**Data Source:** {source}")
-    st.markdown(f"**RSI (14-day):** {latest['RSI']:.2f}")
-    st.markdown(f"**SMA 50:** ${latest['SMA_50']:.2f}")
-    st.markdown(f"**SMA 200:** ${latest['SMA_200']:.2f}")
-    st.markdown(f"**MACD:** {latest['MACD']:.4f}")
-    st.markdown(f"**MACD Signal:** {latest['MACD_Signal']:.4f}")
+    if latest_coingecko is not None:
+        st.markdown(f"**BTC Price (CoinGecko):** ${latest_coingecko['Close']:.2f}")
+        st.markdown(f"**RSI (14-day, CoinGecko):** {latest_coingecko['RSI']:.2f}")
+        st.markdown(f"**SMA 50 (CoinGecko):** ${latest_coingecko['SMA_50']:.2f}")
+        st.markdown(f"**SMA 200 (CoinGecko):** ${latest_coingecko['SMA_200']:.2f}")
+        st.markdown(f"**MACD (CoinGecko):** {latest_coingecko['MACD']:.4f}")
+        st.markdown(f"**MACD Signal (CoinGecko):** {latest_coingecko['MACD_Signal']:.4f}")
+    else:
+        st.markdown("**CoinGecko data not available due to rate limit. Showing Binance data.**")
 
-    signal, reason = generate_signal(latest['RSI'], etoro_price, latest['SMA_50'], latest['SMA_200'], latest['MACD'], latest['MACD_Signal'])
+    # Display results for Binance
+    st.markdown(f"**BTC Price (Binance):** ${latest_binance['Close']:.2f}")
+    st.markdown(f"**RSI (14-day, Binance):** {latest_binance['RSI']:.2f}")
+    st.markdown(f"**SMA 50 (Binance):** ${latest_binance['SMA_50']:.2f}")
+    st.markdown(f"**SMA 200 (Binance):** ${latest_binance['SMA_200']:.2f}")
+    st.markdown(f"**MACD (Binance):** {latest_binance['MACD']:.4f}")
+    st.markdown(f"**MACD Signal (Binance):** {latest_binance['MACD_Signal']:.4f}")
 
+    # Signal generation based on eToro price input
+    signal, reason = generate_signal(
+        latest_binance['RSI'], etoro_price, latest_binance['SMA_50'], latest_binance['SMA_200'], 
+        latest_binance['MACD'], latest_binance['MACD_Signal']
+    )
+    
     st.markdown("---")
     st.subheader(f"📢 {signal}")
     st.markdown(f"**🧠 Reason:** {reason}")
