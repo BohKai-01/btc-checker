@@ -85,7 +85,7 @@ st.set_page_config(page_title="BTC Buy/Sell Signal", layout="centered")
 st.title("🧠 Bitcoin Buy/Sell Signal App")
 
 # Input for current BTC price from eToro
-etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39)
+etoro_price = st.number_input("🔢 Enter current BTC price from eToro (USD):", value=93187.39, format="%.2f", key="etoro_price", help="Enter the current BTC price from eToro", step=0.01)
 
 # Fetch CoinGecko data
 try:
